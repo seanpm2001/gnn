@@ -16,8 +16,8 @@
 from tensorflow_gnn.runner import orchestration
 from tensorflow_gnn.runner.input import datasets
 from tensorflow_gnn.runner.tasks import classification
-from tensorflow_gnn.runner.tasks import dgi
 from tensorflow_gnn.runner.tasks import regression
+from tensorflow_gnn.runner.tasks import unsupervised
 from tensorflow_gnn.runner.trainers import keras_fit
 from tensorflow_gnn.runner.utils import attribution
 from tensorflow_gnn.runner.utils import model as model_utils
@@ -68,7 +68,7 @@ TPUStrategy = strategies.TPUStrategy
 # Tasks
 #
 # Unsupervised
-DeepGraphInfomax = dgi.DeepGraphInfomax
+DeepGraphInfomax = unsupervised.DeepGraphInfomax
 # Classification
 RootNodeBinaryClassification = classification.RootNodeBinaryClassification
 RootNodeMulticlassClassification = classification.RootNodeMulticlassClassification
@@ -97,7 +97,7 @@ ModelFromInitAndUpdates = model_templates.ModelFromInitAndUpdates
 del orchestration
 del datasets
 del classification
-del dgi
+del unsupervised
 del regression
 del keras_fit
 del attribution

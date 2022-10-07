@@ -30,29 +30,6 @@ py_strict_test(
 )
 
 pytype_strict_library(
-    name = "dgi",
-    srcs = ["dgi.py"],
-    srcs_version = "PY3",
-    visibility = ["//tensorflow_gnn/runner:__pkg__"],
-    deps = [
-        "//:expect_tensorflow_installed",
-        "//tensorflow_gnn",
-    ],
-)
-
-py_strict_test(
-    name = "dgi_test",
-    srcs = ["dgi_test.py"],
-    srcs_version = "PY3",
-    deps = [
-        ":dgi",
-        "//:expect_tensorflow_installed",
-        "//tensorflow_gnn",
-        "//tensorflow_gnn/runner:orchestration",
-    ],
-)
-
-pytype_strict_library(
     name = "regression",
     srcs = ["regression.py"],
     srcs_version = "PY3",
@@ -73,6 +50,29 @@ py_strict_test(
     deps = [
         ":regression",
         "//:expect_absl_installed",
+        "//:expect_tensorflow_installed",
+        "//tensorflow_gnn",
+        "//tensorflow_gnn/runner:orchestration",
+    ],
+)
+
+pytype_strict_library(
+    name = "unsupervised",
+    srcs = ["unsupervised.py"],
+    srcs_version = "PY3",
+    visibility = ["//tensorflow_gnn/runner:__pkg__"],
+    deps = [
+        "//:expect_tensorflow_installed",
+        "//tensorflow_gnn",
+    ],
+)
+
+py_strict_test(
+    name = "unsupervised_test",
+    srcs = ["unsupervised_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":unsupervised",
         "//:expect_tensorflow_installed",
         "//tensorflow_gnn",
         "//tensorflow_gnn/runner:orchestration",
