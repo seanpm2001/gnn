@@ -44,6 +44,7 @@ pytype_strict_library(
         ":graph_tensor",
         ":tensor_utils",
         "//:expect_tensorflow_installed",
+        "//tensorflow_gnn/graph:tag_utils",
         "//tensorflow_gnn/keras:keras_tensors",
     ],
 )

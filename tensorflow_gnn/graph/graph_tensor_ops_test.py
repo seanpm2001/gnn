@@ -1704,5 +1704,195 @@ class EdgeMaskingTest(tf.test.TestCase, parameterized.TestCase):
       ops.mask_edges(graph, 'edges', as_tensor([True, False]), 'masked')
 
 
+class SampleUnconnectedNodesTest(tf.test.TestCase, parameterized.TestCase):
+  """Tests for sampling unconnected nodes over a scalar GraphTensor."""
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='UnconnectedNodesCapped',
+          graph=gt.GraphTensor.from_pieces(
+              node_sets={
+                  'a':
+                      gt.NodeSet.from_fields(
+                          features={'f': as_tensor([1., 2.])},
+                          sizes=as_tensor([2])),
+                  'b':
+                      gt.NodeSet.from_fields(features={}, sizes=as_tensor([4])),
+              },
+              edge_sets={
+                  'a->b':
+                      gt.EdgeSet.from_fields(
+                          sizes=as_tensor([3]),
+                          adjacency=adj.Adjacency.from_indices(
+                              ('a', as_tensor([0, 1, 1])),
+                              ('b', as_tensor([0, 1, 3])),
+                          )),
+              }),
+          positive_edge_set_names=['a->b'],
+          max_negative_samples=4,
+          negative_samples_node_tag=const.TARGET,
+          expected=as_tensor([[1, 2], [0, 2]])),
+      dict(
+          testcase_name='UnconnectedNodesMultiComponent',
+          graph=gt.GraphTensor.from_pieces(
+              node_sets={
+                  'a':
+                      gt.NodeSet.from_fields(
+                          features={}, sizes=as_tensor([2, 3])),
+                  'b':
+                      gt.NodeSet.from_fields(
+                          features={}, sizes=as_tensor([4, 2])),
+              },
+              edge_sets={
+                  'a->b':
+                      gt.EdgeSet.from_fields(
+                          sizes=as_tensor([3, 1]),
+                          adjacency=adj.Adjacency.from_indices(
+                              ('a', as_tensor([0, 1, 1, 2])),
+                              ('b', as_tensor([0, 1, 3, 5])),
+                          )),
+              }),
+          positive_edge_set_names=['a->b'],
+          max_negative_samples=3,
+          negative_samples_node_tag=const.TARGET,
+          expected=as_tensor([[1, 2, 3], [0, 2, 4], [0, 1, 2],
+                              [0, 1, 2], [0, 1, 2]])),
+      dict(
+          testcase_name='MultiPositiveEdges',
+          graph=gt.GraphTensor.from_pieces(
+              node_sets={
+                  'a':
+                      gt.NodeSet.from_fields(features={}, sizes=as_tensor([5])),
+                  'b':
+                      gt.NodeSet.from_fields(
+                          features={}, sizes=as_tensor([10])),
+              },
+              edge_sets={
+                  'a->b':
+                      gt.EdgeSet.from_fields(
+                          sizes=as_tensor([3]),
+                          adjacency=adj.Adjacency.from_indices(
+                              ('a', as_tensor([0, 1, 1])),
+                              ('b', as_tensor([0, 1, 3])),
+                          )),
+                  'masked_a->b':
+                      gt.EdgeSet.from_fields(
+                          sizes=as_tensor([2]),
+                          adjacency=adj.Adjacency.from_indices(
+                              ('a', as_tensor([0, 1])),
+                              ('b', as_tensor([2, 0])),
+                          )),
+              }),
+          positive_edge_set_names=['a->b', 'masked_a->b'],
+          max_negative_samples=4,
+          negative_samples_node_tag=const.TARGET,
+          expected=as_tensor([[1, 3, 4, 5], [2, 4, 5, 6], [0, 1, 2, 3],
+                              [0, 1, 2, 3], [0, 1, 2, 3]])),
+      dict(
+          testcase_name='EmptyNodes',
+          graph=gt.GraphTensor.from_pieces(
+              node_sets={
+                  'a':
+                      gt.NodeSet.from_fields(features={}, sizes=as_tensor([0])),
+                  'b':
+                      gt.NodeSet.from_fields(features={}, sizes=as_tensor([4])),
+              },
+              edge_sets={
+                  'a->b':
+                      gt.EdgeSet.from_fields(
+                          sizes=as_tensor([0]),
+                          adjacency=adj.Adjacency.from_indices(
+                              ('a', as_tensor([], dtype=tf.int32)),
+                              ('b', as_tensor([], dtype=tf.int32)),
+                          )),
+              }),
+          positive_edge_set_names=['a->b'],
+          max_negative_samples=4,
+          negative_samples_node_tag=const.TARGET,
+          expected=tf.reshape(as_tensor([]), [0, 4])),
+      dict(
+          testcase_name='EmptyEdges',
+          graph=gt.GraphTensor.from_pieces(
+              node_sets={
+                  'a':
+                      gt.NodeSet.from_fields(features={}, sizes=as_tensor([3])),
+                  'b':
+                      gt.NodeSet.from_fields(features={}, sizes=as_tensor([2])),
+              },
+              edge_sets={
+                  'a->b':
+                      gt.EdgeSet.from_fields(
+                          sizes=as_tensor([0]),
+                          adjacency=adj.Adjacency.from_indices(
+                              ('a', as_tensor([], dtype=tf.int32)),
+                              ('b', as_tensor([], dtype=tf.int32)),
+                          )),
+              }),
+          positive_edge_set_names=['a->b'],
+          max_negative_samples=4,
+          negative_samples_node_tag=const.TARGET,
+          expected=as_tensor([[0, 1], [0, 1], [0, 1]])))
+  def test(self, graph, positive_edge_set_names, max_negative_samples,
+           negative_samples_node_tag, expected):
+    actual = ops.sample_unconnected_nodes(graph, positive_edge_set_names,
+                                          max_negative_samples,
+                                          negative_samples_node_tag)
+    tf.print(f'{actual=}')
+    self.assertAllEqual(actual, expected)
+
+  def testEmptyEdgesets(self):
+    graph = gt.GraphTensor.from_pieces(
+        node_sets={
+            'nodes':
+                gt.NodeSet.from_fields(
+                    features={'f': as_tensor([1., 2.])}, sizes=as_tensor([2])),
+        },
+        edge_sets={
+            'edges':
+                gt.EdgeSet.from_fields(
+                    features={},
+                    sizes=as_tensor([3]),
+                    adjacency=adj.Adjacency.from_indices(
+                        ('nodes', as_tensor([0, 1, 1])),
+                        ('nodes', as_tensor([0, 0, 1])),
+                    )),
+        })
+    with self.assertRaisesRegex(ValueError,
+                                'positive_edge_set_names cant be empty'):
+      ops.sample_unconnected_nodes(graph, [], 3, const.TARGET)
+
+  def testInvalidEdgesets(self):
+    graph = gt.GraphTensor.from_pieces(
+        node_sets={
+            'nodes1':
+                gt.NodeSet.from_fields(
+                    features={'f': as_tensor([1., 2.])}, sizes=as_tensor([2])),
+            'nodes2':
+                gt.NodeSet.from_fields(
+                    features={'f': as_tensor([1.])}, sizes=as_tensor([1])),
+        },
+        edge_sets={
+            'edges1':
+                gt.EdgeSet.from_fields(
+                    features={},
+                    sizes=as_tensor([3]),
+                    adjacency=adj.Adjacency.from_indices(
+                        ('nodes1', as_tensor([0, 1, 1])),
+                        ('nodes1', as_tensor([0, 0, 1])),
+                    )),
+            'edges2':
+                gt.EdgeSet.from_fields(
+                    features={},
+                    sizes=as_tensor([1]),
+                    adjacency=adj.Adjacency.from_indices(
+                        ('nodes2', as_tensor([0])),
+                        ('nodes2', as_tensor([0])),
+                    )),
+        })
+    with self.assertRaisesRegex(
+        ValueError,
+        r'source_name and target_name doesnt match among the edge_sets in .*'):
+      ops.sample_unconnected_nodes(graph, ['edges1', 'edges2'], 3, const.TARGET)
+
 if __name__ == '__main__':
   tf.test.main()

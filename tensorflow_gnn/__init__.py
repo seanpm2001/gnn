@@ -161,6 +161,7 @@ shuffle_scalar_components = graph_tensor_ops.shuffle_scalar_components
 combine_values = graph_tensor_ops.combine_values
 reorder_nodes = graph_tensor_ops.reorder_nodes
 shuffle_nodes = graph_tensor_ops.shuffle_nodes
+sample_unconnected_nodes = graph_tensor_ops.sample_unconnected_nodes
 
 # Normalization operations.
 softmax = normalization_ops.softmax

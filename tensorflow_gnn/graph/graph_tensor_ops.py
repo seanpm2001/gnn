@@ -20,6 +20,7 @@ import tensorflow as tf
 from tensorflow_gnn.graph import adjacency as adj
 from tensorflow_gnn.graph import graph_constants as const
 from tensorflow_gnn.graph import graph_tensor as gt
+from tensorflow_gnn.graph import tag_utils
 from tensorflow_gnn.graph import tensor_utils as utils
 from tensorflow_gnn.keras import keras_tensors as kt
 
@@ -743,6 +744,111 @@ def mask_edges(
         context=graph.context,
         node_sets=graph.node_sets,
         edge_sets=new_edge_sets)
+
+
+def sample_unconnected_nodes(
+    graph: GraphTensor, positive_edge_set_names: list[str],
+    max_negative_samples: int,
+    negative_samples_node_tag: IncidentNodeTag) -> Field:
+  """Generates negative samples for the edges specified by the positive_edge_set_names.
+
+  This operation identifies all the unconnected node-ids with the incident node
+  tag `negative_samples_node_tag` to each of the node-ids at the opposite end of
+  the adjacency lists specified with `positive_edge_set_names`.
+
+  Args:
+    graph: A scalar GraphTensor.
+    positive_edge_set_names: Edge-set names for positive edge lists. Each edge
+      set should have the same source and target node type.
+    max_negative_samples: Maximum number of negative samples to return per node.
+    negative_samples_node_tag: Incident side of the edge-set adjacency, among
+      which negative samples will be generated.
+
+  Returns:
+    Tensor specifying negative node ids sampled from node-set identified via the
+    negative_samples_node_tag incident node tag for each node at the opposite
+    end of the adjacency.
+
+  Raises:
+    ValueError: if graph is not scalar (rank > 0), positive_edge_set_names is
+    empty, or positive_edge_set_names contains edge_sets with different source
+    and target names.
+  """
+  gt.check_scalar_graph_tensor(graph, 'tfgnn.sample_unconnected_nodes()')
+  if not positive_edge_set_names:
+    raise ValueError('positive_edge_set_names cant be empty')
+
+  source_node_id_list = []
+  target_node_id_list = []
+  source_node_name = None
+  target_node_name = None
+  for positive_edge_set in positive_edge_set_names:
+    edge_set = graph.edge_sets[positive_edge_set]
+    positive_adjacency = edge_set.adjacency
+    if not source_node_name:
+      source_node_name = positive_adjacency.source_name
+    if source_node_name != positive_adjacency.source_name:
+      raise ValueError(
+          f'source_name and target_name doesnt match among the edge_sets in '
+          f'the positive_edge_set_names, source_node_name: '
+          f'{positive_adjacency.source_name} vs {source_node_name}')
+    if not target_node_name:
+      target_node_name = positive_adjacency.target_name
+    if target_node_name != positive_adjacency.target_name:
+      raise ValueError(f'source_name and target_name does not match among the'
+                       f' edge_sets in the positive_edge_set_names, '
+                       f'target_node_name: {positive_adjacency.target_name} vs '
+                       f'{target_node_name}')
+    source_node_id_list.append(positive_adjacency.source)
+    target_node_id_list.append(positive_adjacency.target)
+  if negative_samples_node_tag == const.TARGET:
+    sampling_pos_source_node_ids = tf.concat(source_node_id_list, axis=0)
+    sampling_pos_target_node_ids = tf.concat(target_node_id_list, axis=0)
+  else:
+    sampling_pos_source_node_ids = tf.concat(target_node_id_list, axis=0)
+    sampling_pos_target_node_ids = tf.concat(source_node_id_list, axis=0)
+  sampling_source_node_tag = tag_utils.reverse_tag(negative_samples_node_tag)
+  sampling_source_node_name = positive_adjacency.node_set_name(
+      sampling_source_node_tag)
+  sampling_target_node_name = positive_adjacency.node_set_name(
+      negative_samples_node_tag)
+
+  negatives_node_ids = tf.range(
+      graph.node_sets[sampling_target_node_name].total_size)
+  negatives_node_ids = tf.tile(
+      negatives_node_ids,
+      tf.expand_dims(
+          graph.node_sets[sampling_source_node_name].total_size, axis=0))
+  negative_samples_mask = tf.ones_like(negatives_node_ids, dtype=tf.bool)
+  indices = tf.math.multiply(
+      sampling_pos_source_node_ids,
+      graph.node_sets[sampling_target_node_name].total_size)
+  indices = tf.math.add(sampling_pos_target_node_ids, indices)
+  positive_ids_mask = tf.zeros_like(indices, dtype=tf.bool)
+  indices = tf.expand_dims(indices, axis=-1)
+  negative_samples_mask = tf.tensor_scatter_nd_update(negative_samples_mask,
+                                                      indices,
+                                                      positive_ids_mask)
+
+  negatives_node_ids = tf.reshape(negatives_node_ids, [
+      graph.node_sets[sampling_source_node_name].total_size,
+      graph.node_sets[sampling_target_node_name].total_size
+  ])
+  negative_samples_mask = tf.reshape(negative_samples_mask, [
+      graph.node_sets[sampling_source_node_name].total_size,
+      graph.node_sets[sampling_target_node_name].total_size
+  ])
+  unconnected_node_ids = tf.ragged.boolean_mask(negatives_node_ids,
+                                                negative_samples_mask)
+  max_negative_samples = tf.cast(
+      tf.math.minimum(max_negative_samples,
+                      tf.math.reduce_min(unconnected_node_ids.row_lengths())),
+      graph.node_sets[sampling_source_node_name].total_size.dtype)
+  unconnected_node_ids = unconnected_node_ids.to_tensor(shape=[
+      graph.node_sets[sampling_source_node_name].total_size,
+      max_negative_samples
+  ])
+  return unconnected_node_ids
 
 
 def with_empty_set_value(reduce_op: UnsortedReduceOp,
